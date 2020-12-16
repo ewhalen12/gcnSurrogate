@@ -12,6 +12,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import pickle
 
+sys.path.append('./util')
+from gcnSurrogateUtil import *
+
 class FeaStNet(torch.nn.Module):
     def __init__(self, device=torch.device('cuda')):
         super(FeaStNet, self).__init__()
@@ -167,29 +170,28 @@ class FeaStNet(torch.nn.Module):
                     
         # load best model
         print(f'loading checkpoint {bestEpoch}')
+        
+        return {'train': trainHist, 'val': valHist}
 
-        return trainHist, valHist
-
-    def predict(model, inputs, device):
+    def predict(self, inputs):
         # prep data
-        inputsScaled = self.applySS(model.ss, inputs)
+        inputsScaled = self.applySS(inputs)
         testLoader = tg.data.DataLoader(inputsScaled, batch_size=1, shuffle=False)
 
-        model.to(device)
         preds = []
-        model.eval()
+        self.eval()
         with torch.no_grad():
             for batch in testLoader:
-                batch.to(device)
-                out = model(batch)
-                p = self.applyInvSS(model.ss, out.cpu().numpy())
+                batch.to(self.device)
+                out = self(batch)
+                p = self.applyInvSS(out.cpu().numpy())
                 preds.append(p)
         return preds
 
-    def testModel(model, inputs, outputs, baselineRef, device, level='set'):
-        preds = predict(model, inputs, device)
+    def testModel(self, inputs, baselineRef=None, level='set'):
+        preds = self.predict(inputs)
         if baselineRef: baselineRef = [b.y.cpu().numpy() for b in baselineRef]
-        return cu.computeFieldLossMetrics([g.y.cpu().numpy() for g in outputs], 
+        return computeFieldLossMetrics([g.y.cpu().numpy() for g in inputs], 
                                           preds, 
                                           baselineRef=baselineRef, level=level)
 
@@ -199,15 +201,3 @@ class FeaStNet(torch.nn.Module):
         ss = pickle.load(open(ssFile, 'rb'))
         model.ss = ss
         return model
-
-    def plotHistory(trainHist, valHist):
-        histDf = pd.DataFrame({'train': trainHist, 'val': valHist})
-        return alt.Chart(histDf.reset_index()).transform_fold(
-                ['train', 'val'],
-                as_=['metric', 'value']
-            ).mark_line().encode(
-                alt.X('index:Q'),
-                alt.Y('value:Q', axis=alt.Axis(title='loss')),
-                color=alt.Color('metric:N'),
-                tooltip=['epoch:Q', 'value:Q']
-            ).properties(width=400, height=200)
