@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 import pickle
 
 class FeaStNet(torch.nn.Module):
-    def __init__(self, device):
+    def __init__(self, device=torch.device('cuda')):
         super(FeaStNet, self).__init__()
         self.device = device
         
@@ -62,10 +62,10 @@ class FeaStNet(torch.nn.Module):
         x = self.lin2(x)
         return x
     
-    def logTrans(self, x)
+    def logTrans(self, x):
         return np.sign(x)*np.log(10.0*np.abs(x)+1.0)
     
-    def invLogTrans(self, y)
+    def invLogTrans(self, y):
         return np.sign(y)*(np.exp(np.abs(y))-1.0)/10.0
     
     def fitSS(self, graphList):
@@ -86,16 +86,16 @@ class FeaStNet(torch.nn.Module):
         for graph in transformedGraphList:
             if self.ssTrans:
                 if self.flatten:
-                    graph.y = torch.as_tensor(ss.transform(graph.y.reshape(-1,1).cpu()).reshape(-1,2), dtype=torch.float)
+                    graph.y = torch.as_tensor(self.ss.transform(graph.y.reshape(-1,1).cpu()).reshape(-1,2), dtype=torch.float)
                 else:
-                    graph.y = torch.as_tensor(ss.transform(graph.y.reshape(1,-1).cpu()).reshape(-1,2), dtype=torch.float)
+                    graph.y = torch.as_tensor(self.ss.transform(graph.y.reshape(1,-1).cpu()).reshape(-1,2), dtype=torch.float)
             if self.logTrans: 
-                graph.y = logTrans(graph.y)
+                graph.y = self.logTrans(graph.y)
         return transformedGraphList
 
     def applyInvSS(self, out):
         if self.logTrans: 
-            out = invLogTrans(out)
+            out = self.invLogTrans(out)
         if self.ssTrans:
             if self.flatten:
                 out = self.ss.inverse_transform(out.reshape(-1,1)).reshape(-1,2)
@@ -103,26 +103,27 @@ class FeaStNet(torch.nn.Module):
                 out = self.ss.inverse_transform(out.reshape(1,-1)).reshape(-1,2)
         return out
     
-    def train(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batch_size=256, flatten=False, logTrans=True, ssTrans=True):
+    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batch_size=256, flatten=False, logTrans=True, ssTrans=True):
         # data transformation settings
         self.flatten = flatten
-        self.logTrans = logtrans
+        self.logTrans = logTrans
         self.ssTrans = ssTrans
         
         # prep train data
-        self.ss = fitSS(trainGraphs)
-        modelFile = None
-        trainGraphsScaled = applySS(trainGraphs)
+        self.fitSS(trainGraphs)
+        trainGraphsScaled = self.applySS(trainGraphs)
         loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batch_size, shuffle=True)
 
         # prep validation data
-        valGraphsScaled = applySS(valGraphs)
+        valGraphsScaled = self.applySS(valGraphs)
         valLoader = tg.data.DataLoader(valGraphsScaled, batch_size=1, shuffle=False)
 
         # prep model
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=10e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=10e-4)
         trainHist, valHist = [], []
+        bestEpoch = 0
         self.to(self.device)
+        if saveDir and not os.path.exists(saveDir): os.makedirs(saveDir, exist_ok=True)
 
         for epoch in range(epochs):
 
@@ -143,7 +144,7 @@ class FeaStNet(torch.nn.Module):
 
             ### validate ###
             batchHist = []
-            model.eval()
+            self.eval()
             with torch.no_grad():
                 for batch in valLoader:
                     batch.to(self.device)
@@ -161,13 +162,17 @@ class FeaStNet(torch.nn.Module):
                 # if new best model
                 if (np.argmin(valHist) == len(valHist)-1):
                     modelFile = os.path.join(saveDir, f'checkpoint_{epoch}')
-                    torch.save(model.state_dict(), modelFile) # save best model    
+                    bestEpoch = epoch
+                    torch.save(self, modelFile) # save best model
+                    
+        # load best model
+        print(f'loading checkpoint {bestEpoch}')
 
         return trainHist, valHist
 
     def predict(model, inputs, device):
         # prep data
-        inputsScaled = applySS(model.ss, inputs)
+        inputsScaled = self.applySS(model.ss, inputs)
         testLoader = tg.data.DataLoader(inputsScaled, batch_size=1, shuffle=False)
 
         model.to(device)
@@ -177,18 +182,18 @@ class FeaStNet(torch.nn.Module):
             for batch in testLoader:
                 batch.to(device)
                 out = model(batch)
-                p = applyInvSS(model.ss, out.cpu().numpy())
+                p = self.applyInvSS(model.ss, out.cpu().numpy())
                 preds.append(p)
         return preds
 
-    def test(model, inputs, outputs, baselineRef, device, level='set'):
+    def testModel(model, inputs, outputs, baselineRef, device, level='set'):
         preds = predict(model, inputs, device)
         if baselineRef: baselineRef = [b.y.cpu().numpy() for b in baselineRef]
         return cu.computeFieldLossMetrics([g.y.cpu().numpy() for g in outputs], 
                                           preds, 
                                           baselineRef=baselineRef, level=level)
 
-    def loadModelFromFile(modelFile, ssFile, device):
+    def loadModelFromFile(self, modelFile):
         model = FeaStNet()
         model.load_state_dict(torch.load(modelFile, map_location=device), strict=False)
         ss = pickle.load(open(ssFile, 'rb'))
