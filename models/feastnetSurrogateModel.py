@@ -1,5 +1,3 @@
-import glob
-import os
 import sys
 from time import time
 import numpy as np
@@ -7,7 +5,6 @@ import pandas as pd
 import torch
 import torch_geometric as tg
 import torch.nn.functional as F
-import altair as alt
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import pickle
@@ -170,6 +167,7 @@ class FeaStNet(torch.nn.Module):
                     
         # load best model
         print(f'loading checkpoint {bestEpoch}')
+        self = torch.load(modelFile)
         
         return {'train': trainHist, 'val': valHist}
 
