@@ -1,2 +1,4 @@
+.json
 /.ipynb_checkpoints
 /results
+/__pycache__
