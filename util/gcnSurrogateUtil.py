@@ -38,6 +38,11 @@ def plotHistory(history):
         ).properties(width=400, height=200)
 
 ###############################################################################
+def pivotDict(dictOfLists):
+    listOfDicts = [dict(zip(dictOfLists,t)) for t in zip(*dictOfLists.values())]
+    return listOfDicts
+
+###############################################################################
 # Takes in two lists of numpy arrays (representing fields) and calculates
 # several loss metrics on the user specified level.
 def computeFieldLossMetrics(truths, preds, level='field', baselineRef=None):
