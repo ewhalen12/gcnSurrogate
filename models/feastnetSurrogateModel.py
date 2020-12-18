@@ -19,6 +19,7 @@ class FeaStNet(torch.nn.Module):
     def __init__(self, device=torch.device('cuda')):
         super(FeaStNet, self).__init__()
         self.device = device
+        self.checkptFile = None
         
         self.norm0 = tg.nn.BatchNorm(2, momentum=0.3, affine=True, track_running_stats=True)
         self.lin0 = torch.nn.Linear(4, 16)
@@ -117,8 +118,9 @@ class FeaStNet(torch.nn.Module):
                    restartFile=None):
         if restartFile:
             print('loading restart file')
-            self = torch.load(restartFile)
-            print(self.checkptFile)
+            saved = torch.load(restartFile)
+            for key, val in saved.__dict__.items():
+                setattr(self, key, val)
             self.checkptFile = None
         else: 
             # data transformation settings
@@ -177,13 +179,17 @@ class FeaStNet(torch.nn.Module):
 
                 # if new best model
                 if (np.argmin(valHist) == len(valHist)-1):
+                    lastCheckpt = self.checkptFile
                     self.checkptFile = os.path.join(saveDir, f'checkpoint_{epoch}')
                     bestEpoch = epoch
                     torch.save(self, self.checkptFile) # save best model
+                    if lastCheckpt: os.remove(lastCheckpt) # cleanup
                     
         # load best model
         print(f'loading checkpoint {bestEpoch}')
-        self = torch.load(self.checkptFile)
+        saved = torch.load(self.checkptFile)
+        for key, val in saved.__dict__.items():
+            setattr(self, key, val)
         
         return {'train': trainHist, 'val': valHist}
     
