@@ -14,6 +14,8 @@ sys.path.append('./util')
 from gcnSurrogateUtil import *
 
 class FeaStNet(torch.nn.Module):
+    
+###############################################################################
     def __init__(self, device=torch.device('cuda')):
         super(FeaStNet, self).__init__()
         self.device = device
@@ -34,7 +36,8 @@ class FeaStNet(torch.nn.Module):
         self.normc5 = tg.nn.BatchNorm(128, momentum=0.3, affine=True, track_running_stats=True)
         self.lin1 = torch.nn.Linear(128, 64)
         self.lin2 = torch.nn.Linear(64, 2)
-
+        
+###############################################################################
     def forward(self, data):
         x = self.norm0(data.pos)
         x = torch.cat([x, data.x.float()], 1)
@@ -63,12 +66,15 @@ class FeaStNet(torch.nn.Module):
         x = self.lin2(x)
         return x
     
+###############################################################################
     def logTrans(self, x):
         return np.sign(x)*np.log(10.0*np.abs(x)+1.0)
     
+###############################################################################
     def invLogTrans(self, y):
         return np.sign(y)*(np.exp(np.abs(y))-1.0)/10.0
     
+###############################################################################
     def fitSS(self, graphList):
         self.ss = StandardScaler()
         if self.flatten:
@@ -81,7 +87,8 @@ class FeaStNet(torch.nn.Module):
                 allResponses = np.vstack([allResponses, graph.y.reshape(1,-1)])
         self.ss.fit(allResponses)
         return
-
+    
+###############################################################################
     def applySS(self, graphList):
         transformedGraphList = [g.clone() for g in graphList] # deep copy
         for graph in transformedGraphList:
@@ -93,7 +100,8 @@ class FeaStNet(torch.nn.Module):
             if self.logTrans: 
                 graph.y = self.logTrans(graph.y)
         return transformedGraphList
-
+    
+###############################################################################
     def applyInvSS(self, out):
         if self.logTrans: 
             out = self.invLogTrans(out)
@@ -104,14 +112,21 @@ class FeaStNet(torch.nn.Module):
                 out = self.ss.inverse_transform(out.reshape(1,-1)).reshape(-1,2)
         return out
     
-    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batch_size=256, flatten=False, logTrans=True, ssTrans=True):
-        # data transformation settings
-        self.flatten = flatten
-        self.logTrans = logTrans
-        self.ssTrans = ssTrans
-        
-        # prep train data
-        self.fitSS(trainGraphs)
+###############################################################################
+    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batch_size=256, flatten=False, logTrans=True, ssTrans=True,
+                   restartFile=None):
+        if restartFile:
+            print('loading restart file')
+            self = torch.load(restartFile)
+            print(self.checkptFile)
+            self.checkptFile = None
+        else: 
+            # data transformation settings
+            self.flatten = flatten
+            self.logTrans = logTrans
+            self.ssTrans = ssTrans
+            self.fitSS(trainGraphs)
+            
         trainGraphsScaled = self.applySS(trainGraphs)
         loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batch_size, shuffle=True)
 
@@ -162,16 +177,17 @@ class FeaStNet(torch.nn.Module):
 
                 # if new best model
                 if (np.argmin(valHist) == len(valHist)-1):
-                    modelFile = os.path.join(saveDir, f'checkpoint_{epoch}')
+                    self.checkptFile = os.path.join(saveDir, f'checkpoint_{epoch}')
                     bestEpoch = epoch
-                    torch.save(self, modelFile) # save best model
+                    torch.save(self, self.checkptFile) # save best model
                     
         # load best model
         print(f'loading checkpoint {bestEpoch}')
-        self = torch.load(modelFile)
+        self = torch.load(self.checkptFile)
         
         return {'train': trainHist, 'val': valHist}
-
+    
+###############################################################################
     def predict(self, inputs):
         # prep data
         inputsScaled = self.applySS(inputs)
@@ -187,6 +203,7 @@ class FeaStNet(torch.nn.Module):
                 preds.append(p)
         return preds
 
+###############################################################################
     def testModel(self, inputs, baselineRef=None, level='set'):
         preds = self.predict(inputs)
         if baselineRef: baselineRef = [b.y.cpu().numpy() for b in baselineRef]
@@ -194,9 +211,5 @@ class FeaStNet(torch.nn.Module):
                                           preds, 
                                           baselineRef=baselineRef, level=level)
 
-    def loadModelFromFile(self, modelFile):
-        model = FeaStNet()
-        model.load_state_dict(torch.load(modelFile, map_location=device), strict=False)
-        ss = pickle.load(open(ssFile, 'rb'))
-        model.ss = ss
-        return model
+    
+    
