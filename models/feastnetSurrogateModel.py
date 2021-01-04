@@ -118,9 +118,10 @@ class FeaStNet(torch.nn.Module):
                    restartFile=None):
         if restartFile:
             print('loading restart file')
-            saved = torch.load(restartFile)
-            for key, val in saved.__dict__.items():
-                setattr(self, key, val)
+            self.loadModel(restartFile)
+#             saved = torch.load(restartFile)
+#             for key, val in saved.__dict__.items():
+#                 setattr(self, key, val)
             self.checkptFile = None
         else: 
             # data transformation settings
@@ -187,9 +188,10 @@ class FeaStNet(torch.nn.Module):
                     
         # load best model
         print(f'loading checkpoint {bestEpoch}')
-        saved = torch.load(self.checkptFile)
-        for key, val in saved.__dict__.items():
-            setattr(self, key, val)
+        self.loadModel(self.checkptFile)
+#         saved = torch.load(self.checkptFile)
+#         for key, val in saved.__dict__.items():
+#             setattr(self, key, val)
         
         return {'train': trainHist, 'val': valHist}
     
@@ -216,6 +218,12 @@ class FeaStNet(torch.nn.Module):
         return computeFieldLossMetrics([g.y.cpu().numpy() for g in inputs], 
                                           preds, 
                                           baselineRef=baselineRef, level=level)
+    
+###############################################################################
+    def loadModel(self, modelFile):
+        saved = torch.load(modelFile)
+        for key, val in saved.__dict__.items():
+            setattr(self, key, val)
 
     
     
