@@ -6,7 +6,6 @@ import torch
 import torch_geometric as tg
 import torch.nn.functional as F
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 
 sys.path.append('./util')
 from gcnSurrogateUtil import *
@@ -117,9 +116,6 @@ class FeaStNet(torch.nn.Module):
         if restartFile:
             print('loading restart file')
             self.loadModel(restartFile)
-#             saved = torch.load(restartFile)
-#             for key, val in saved.__dict__.items():
-#                 setattr(self, key, val)
             self.checkptFile = None
         else: 
             # data transformation settings
@@ -187,9 +183,6 @@ class FeaStNet(torch.nn.Module):
         # load best model
         print(f'loading checkpoint {bestEpoch}')
         self.loadModel(self.checkptFile)
-#         saved = torch.load(self.checkptFile)
-#         for key, val in saved.__dict__.items():
-#             setattr(self, key, val)
         
         return {'train': trainHist, 'val': valHist}
     
