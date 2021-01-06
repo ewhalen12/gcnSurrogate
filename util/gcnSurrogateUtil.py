@@ -36,11 +36,11 @@ def plotHistory(history):
     histDf['epoch'] = histDf.index
     return alt.Chart(histDf).transform_fold(
             ['train', 'val'],
-            as_=['metric', 'value']
+            as_=['set', 'value']
             ).mark_line().encode(
                 alt.X('epoch:Q'),
                 alt.Y('value:Q', axis=alt.Axis(title='loss')),
-                color=alt.Color('metric:N'),
+                color=alt.Color('set:N'),
                 tooltip=['epoch:Q', 'value:Q']
             ).properties(width=400, height=200)
 
