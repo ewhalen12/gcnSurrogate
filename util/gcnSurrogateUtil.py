@@ -14,10 +14,10 @@ def filterbyDisp(graphList, pctCutoff):
 
 ###############################################################################
 # partition into train, validate and test
-def partitionGraphList(allGraphs):
+def partitionGraphList(allGraphs, testSize=0.2, valSize=0.15, seed=1234):
     allIds = list(range(len(allGraphs)))
-    other, testIds = train_test_split(allIds, test_size=0.2, shuffle=True, random_state=1234) # 20% test
-    trainIds, valIds = train_test_split(other, test_size=0.15, shuffle=True, random_state=1234) # 15% val 15% test
+    other, testIds = train_test_split(allIds, test_size=testSize, shuffle=True, random_state=seed) # 20% test
+    trainIds, valIds = train_test_split(other, test_size=valSize, shuffle=True, random_state=seed) # 15% val 15% test
     trainGraphs = [allGraphs[i] for i in trainIds]
     valGraphs = [allGraphs[i] for i in valIds]
     testGraphs = [allGraphs[i] for i in testIds]
