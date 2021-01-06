@@ -33,15 +33,16 @@ def partitionGraphList(allGraphs, testSize=0.2, valSize=0.15, seed=1234):
 # plot training history
 def plotHistory(history):
     histDf = pd.DataFrame(history)
-    return alt.Chart(histDf.reset_index()).transform_fold(
+    histDf['epoch'] = histDf.index
+    return alt.Chart(histDf).transform_fold(
             ['train', 'val'],
             as_=['metric', 'value']
-        ).mark_line().encode(
-            alt.X('index:Q'),
-            alt.Y('value:Q', axis=alt.Axis(title='loss')),
-            color=alt.Color('metric:N'),
-            tooltip=['epoch:Q', 'value:Q']
-        ).properties(width=400, height=200)
+            ).mark_line().encode(
+                alt.X('epoch:Q'),
+                alt.Y('value:Q', axis=alt.Axis(title='loss')),
+                color=alt.Color('metric:N'),
+                tooltip=['epoch:Q', 'value:Q']
+            ).properties(width=400, height=200)
 
 ###############################################################################
 def pivotDict(dictOfLists):
