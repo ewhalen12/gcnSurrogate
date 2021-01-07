@@ -132,7 +132,7 @@ class FeaStNet(torch.nn.Module):
         valLoader = tg.data.DataLoader(valGraphsScaled, batch_size=1, shuffle=False)
 
         # prep model
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=10e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, weight_decay=1e-3)
         trainHist, valHist = [], []
         bestEpoch = 0
         self.to(self.device)
