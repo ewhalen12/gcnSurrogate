@@ -13,55 +13,74 @@ from gcnSurrogateUtil import *
 class FeaStNet(torch.nn.Module):
     
 ###############################################################################
-    def __init__(self, device=torch.device('cuda')):
+    def __init__(self, device=torch.device('cuda'), heads=8, numInputCords=2,
+                 architecture='L16/C32/C64/C128/C256/C128/C128/L64/L2', numOutputs=2, 
+                 useConstraints=True):
         super(FeaStNet, self).__init__()
+        
         self.device = device
         self.checkptFile = None
+        self.architecture = architecture
+        self.useConstraints = useConstraints
+        self.layers = torch.nn.ModuleList()
         
-        self.norm0 = tg.nn.BatchNorm(2, momentum=0.3, affine=True, track_running_stats=True)
-        self.lin0 = torch.nn.Linear(4, 16)
-        self.conv0 = tg.nn.FeaStConv(16, 32, heads=8)
-        self.normc0 = tg.nn.BatchNorm(32, momentum=0.3, affine=True, track_running_stats=True)
-        self.conv1 = tg.nn.FeaStConv(32, 64, heads=8)
-        self.normc1 = tg.nn.BatchNorm(64, momentum=0.3, affine=True, track_running_stats=True)
-        self.conv2 = tg.nn.FeaStConv(64, 128, heads=8)
-        self.normc2 = tg.nn.BatchNorm(128, momentum=0.3, affine=True, track_running_stats=True)
-        self.conv3 = tg.nn.FeaStConv(128, 256, heads=8)
-        self.normc3 = tg.nn.BatchNorm(256, momentum=0.3, affine=True, track_running_stats=True)
-        self.conv4 = tg.nn.FeaStConv(256, 128, heads=8)
-        self.normc4 = tg.nn.BatchNorm(128, momentum=0.3, affine=True, track_running_stats=True)
-        self.conv5 = tg.nn.FeaStConv(128, 128, heads=8)
-        self.normc5 = tg.nn.BatchNorm(128, momentum=0.3, affine=True, track_running_stats=True)
-        self.lin1 = torch.nn.Linear(128, 64)
-        self.lin2 = torch.nn.Linear(64, 2)
+        # create each layer based on user specs
+        # add a relu layer after every linear or conv layer except the last one
+        # add batch norm at the beginning and after every conv layer
+        archParsed = self.architecture.split('/')
+        lastSize = numInputCords
+        self.layers.append(tg.nn.BatchNorm(lastSize, momentum=0.3, affine=True, track_running_stats=True))
+        for i in range(len(archParsed)-1):
+            layerStr = archParsed[i]
+            lCode = layerStr[0]
+            lSize = int(layerStr[1:])
+            assert lCode in ['L', 'C'], 'invalid layer code'
+            assert isinstance(lSize, int), 'layer size must be an integer'
+            
+            if i == 0 and useConstraints: lastSize *= 2
+            
+            # linear layer
+            if lCode == 'L':
+                self.layers.append(torch.nn.Linear(lastSize, lSize))
+                self.layers.append(torch.nn.ReLU())
+                lastSize = lSize
+            
+            # conv layer
+            else:
+                self.layers.append(tg.nn.FeaStConv(lastSize, lSize, heads=heads))
+                self.layers.append(tg.nn.BatchNorm(lSize, momentum=0.3, affine=True, track_running_stats=True))
+                self.layers.append(torch.nn.ReLU())
+                lastSize = lSize
+        
+        # no activation or normalization on output layer
+        layerStr = archParsed[-1]
+        lCode = layerStr[0]
+        assert lCode in ['L', 'C'], 'invalid layer code'
+        assert isinstance(lSize, int), 'layer size must be an integer'
+            
+        if lCode == 'L':
+            self.layers.append(torch.nn.Linear(lastSize, numOutputs))
+        else:
+            self.layers.append(tg.nn.FeaStConv(lastSize, numOutputs, heads=heads))
+    
         
 ###############################################################################
     def forward(self, data):
-        x = self.norm0(data.pos)
-        x = torch.cat([x, data.x.float()], 1)
-        x = self.lin0(x)
-        x = F.relu(x)
-        x = self.conv0(x, data.edge_index)
-        x = self.normc0(x)
-        x = F.relu(x)
-        x = self.conv1(x, data.edge_index)
-        x = self.normc1(x)
-        x = F.relu(x)        
-        x = self.conv2(x, data.edge_index)
-        x = self.normc2(x)
-        x = F.relu(x)
-        x = self.conv3(x, data.edge_index)
-        x = self.normc3(x)
-        x = F.relu(x)
-        x = self.conv4(x, data.edge_index)
-        x = self.normc4(x)
-        x = F.relu(x)
-        x = self.conv5(x, data.edge_index)
-        x = self.normc5(x)
-        x = F.relu(x)
-        x = self.lin1(x)
-        x = F.relu(x)
-        x = self.lin2(x)
+        x = data.pos
+        for i in range(len(self.layers)):
+            layer = self.layers[i]
+            
+            if i == 1 and self.useConstraints:
+                x = torch.cat([x, data.x.float()], 1)
+            
+            # conv layer
+            if isinstance(layer, tg.nn.conv.feast_conv.FeaStConv):
+                x = layer.forward(x, data.edge_index)
+                
+            # linear layer
+            else:
+                x = layer.forward(x)
+
         return x
     
 ###############################################################################
@@ -111,8 +130,8 @@ class FeaStNet(torch.nn.Module):
         return out
     
 ###############################################################################
-    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batch_size=256, flatten=False, logTrans=True, ssTrans=True,
-                   restartFile=None):
+    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=False, logTrans=True, ssTrans=True,
+                   restartFile=None, lr=1e-4, weightDecay=1e-3):
         if restartFile:
             print('loading restart file')
             self.loadModel(restartFile)
@@ -125,14 +144,14 @@ class FeaStNet(torch.nn.Module):
             self.fitSS(trainGraphs)
             
         trainGraphsScaled = self.applySS(trainGraphs)
-        loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batch_size, shuffle=True)
+        loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batchSize, shuffle=True)
 
         # prep validation data
         valGraphsScaled = self.applySS(valGraphs)
         valLoader = tg.data.DataLoader(valGraphsScaled, batch_size=1, shuffle=False)
 
         # prep model
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, weight_decay=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weightDecay)
         trainHist, valHist = [], []
         bestEpoch = 0
         self.to(self.device)
@@ -215,6 +234,5 @@ class FeaStNet(torch.nn.Module):
         saved = torch.load(modelFile)
         for key, val in saved.__dict__.items():
             setattr(self, key, val)
-
-    
-    
+            
+            
