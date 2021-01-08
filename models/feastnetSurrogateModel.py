@@ -235,4 +235,7 @@ class FeaStNet(torch.nn.Module):
         for key, val in saved.__dict__.items():
             setattr(self, key, val)
             
+###############################################################################
+    def getNumParams(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
             
