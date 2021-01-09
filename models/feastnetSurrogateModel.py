@@ -84,11 +84,11 @@ class FeaStNet(torch.nn.Module):
         return x
     
 ###############################################################################
-    def logTrans(self, x):
+    def logTransFunc(self, x):
         return np.sign(x)*np.log(10.0*np.abs(x)+1.0)
     
 ###############################################################################
-    def invLogTrans(self, y):
+    def invLogTransFunc(self, y):
         return np.sign(y)*(np.exp(np.abs(y))-1.0)/10.0
     
 ###############################################################################
@@ -115,13 +115,13 @@ class FeaStNet(torch.nn.Module):
                 else:
                     graph.y = torch.as_tensor(self.ss.transform(graph.y.reshape(1,-1).cpu()).reshape(-1,2), dtype=torch.float)
             if self.logTrans: 
-                graph.y = self.logTrans(graph.y)
+                graph.y = self.logTransFunc(graph.y)
         return transformedGraphList
     
 ###############################################################################
     def applyInvSS(self, out):
         if self.logTrans: 
-            out = self.invLogTrans(out)
+            out = self.invLogTransFunc(out)
         if self.ssTrans:
             if self.flatten:
                 out = self.ss.inverse_transform(out.reshape(-1,1)).reshape(-1,2)
