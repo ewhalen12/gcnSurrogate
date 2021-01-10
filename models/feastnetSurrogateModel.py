@@ -11,10 +11,10 @@ sys.path.append('./util')
 from gcnSurrogateUtil import *
 
 class FeaStNet(torch.nn.Module):
-    
+# old default: 'L16/C32/C64/C128/C256/C128/C128/L64/L2'
 ###############################################################################
     def __init__(self, device=torch.device('cuda'), heads=8, numInputCords=2,
-                 architecture='L16/C32/C64/C128/C256/C128/C128/L64/L2', numOutputs=2, 
+                 architecture='L16/C32/C64/C128/C256/C512/C256/C128/L64/L2', numOutputs=2, 
                  useConstraints=True):
         super(FeaStNet, self).__init__()
         
@@ -130,8 +130,8 @@ class FeaStNet(torch.nn.Module):
         return out
     
 ###############################################################################
-    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=False, logTrans=True, ssTrans=True,
-                   restartFile=None, lr=1e-4, weightDecay=1e-3):
+    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=False, logTrans=False, ssTrans=True,
+                   restartFile=None, lr=1e-3, weightDecay=1e-3):
         if restartFile:
             print('loading restart file')
             self.loadModel(restartFile)
