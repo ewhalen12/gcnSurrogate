@@ -130,7 +130,7 @@ class FeaStNet(torch.nn.Module):
         return out
     
 ###############################################################################
-    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=False, logTrans=False, ssTrans=True,
+    def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=True, logTrans=False, ssTrans=True,
                    restartFile=None, lr=1e-3, weightDecay=1e-3):
         if restartFile:
             print('loading restart file')

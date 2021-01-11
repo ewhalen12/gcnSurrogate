@@ -13,6 +13,11 @@ def filterbyDisp(graphList, pctCutoff):
     return [g for g,b in zip(graphList, mask) if b]
 
 ###############################################################################
+# toss out the wost 10% of designs
+def filterbyDispValue(graphList, cutoff):
+    return [g for g in graphList if max(np.abs(g.y.numpy().flatten()))<=cutoff]
+
+###############################################################################
 # partition into train, validate and test. Default 20% test 12% val 68% test
 def partitionGraphList(allGraphs, testSize=0.2, valSize=0.15, seed=1234): 
     allIds = list(range(len(allGraphs)))
