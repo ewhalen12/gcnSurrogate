@@ -14,13 +14,13 @@ class FeaStNet(torch.nn.Module):
 ###############################################################################
     def __init__(self, device=torch.device('cuda'), heads=8, numInputCords=2,
                  architecture='L16/C32/C64/C128/C256/C512/C256/C128/L64/L2', numOutputs=2, 
-                 useConstraints=True):
+                 useXFeatures=True, numXFeatures=2):
         super(FeaStNet, self).__init__()
         
         self.device = device
         self.checkptFile = None
         self.architecture = architecture
-        self.useConstraints = useConstraints
+        self.useXFeatures = useXFeatures
         self.layers = torch.nn.ModuleList()
         
         # create each layer based on user specs
@@ -36,7 +36,7 @@ class FeaStNet(torch.nn.Module):
             assert lCode in ['L', 'C'], 'invalid layer code'
             assert isinstance(lSize, int), 'layer size must be an integer'
             
-            if i == 0 and useConstraints: lastSize *= 2
+            if i == 0 and useXFeatures: lastSize += numXFeatures
             
             # linear layer
             if lCode == 'L':
@@ -69,7 +69,7 @@ class FeaStNet(torch.nn.Module):
         for i in range(len(self.layers)):
             layer = self.layers[i]
             
-            if i == 1 and self.useConstraints:
+            if i == 1 and self.useXFeatures:
                 x = torch.cat([x, data.x.float()], 1)
             
             # conv layer
