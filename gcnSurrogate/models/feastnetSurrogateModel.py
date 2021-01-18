@@ -14,7 +14,7 @@ class FeaStNet(torch.nn.Module):
 ###############################################################################
     def __init__(self, device=torch.device('cuda'), heads=8, numInputCords=2,
                  architecture='L16/C32/C64/C128/C256/C512/C256/C128/L64/L2', numOutputs=2, 
-                 useXFeatures=True, numXFeatures=2):
+                 useXFeatures=True, numXFeatures=3):
         super(FeaStNet, self).__init__()
         
         self.device = device
@@ -91,6 +91,11 @@ class FeaStNet(torch.nn.Module):
         return np.sign(y)*(np.exp(np.abs(y))-1.0)/10.0
     
 ###############################################################################
+    def makeLoadsBinary(self, graph):
+        graph.x = (graph.x!=0).double()
+        return graph
+    
+###############################################################################
     def fitSS(self, graphList):
         self.ss = StandardScaler()
         if self.flatten:
@@ -105,9 +110,11 @@ class FeaStNet(torch.nn.Module):
         return
     
 ###############################################################################
-    def applySS(self, graphList):
+    def applyAllTransforms(self, graphList):
         transformedGraphList = [g.clone() for g in graphList] # deep copy
         for graph in transformedGraphList:
+            if self.binaryLoads:
+                graph = self.makeLoadsBinary(graph)
             if self.ssTrans:
                 if self.flatten:
                     graph.y = torch.as_tensor(self.ss.transform(graph.y.reshape(-1,1).cpu()).reshape(-1,2), dtype=torch.float)
@@ -118,7 +125,7 @@ class FeaStNet(torch.nn.Module):
         return transformedGraphList
     
 ###############################################################################
-    def applyInvSS(self, out):
+    def applyAllInvTransforms(self, out):
         if self.logTrans: 
             out = self.invLogTransFunc(out)
         if self.ssTrans:
@@ -130,23 +137,24 @@ class FeaStNet(torch.nn.Module):
     
 ###############################################################################
     def trainModel(self, trainGraphs, valGraphs, epochs=10, saveDir=None, batchSize=256, flatten=True, logTrans=False, ssTrans=True,
-                   restartFile=None, lr=1e-3, weightDecay=1e-3):
+                   restartFile=None, lr=1e-3, weightDecay=1e-3, binaryLoads=True):
         if restartFile:
             print('loading restart file')
             self.loadModel(restartFile)
             self.checkptFile = None
         else: 
             # data transformation settings
+            self.binaryLoads = binaryLoads
             self.flatten = flatten
             self.logTrans = logTrans
             self.ssTrans = ssTrans
             self.fitSS(trainGraphs)
             
-        trainGraphsScaled = self.applySS(trainGraphs)
+        trainGraphsScaled = self.applyAllTransforms(trainGraphs)
         loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batchSize, shuffle=True)
 
         # prep validation data
-        valGraphsScaled = self.applySS(valGraphs)
+        valGraphsScaled = self.applyAllTransforms(valGraphs)
         valLoader = tg.data.DataLoader(valGraphsScaled, batch_size=1, shuffle=False)
 
         # prep model
@@ -207,7 +215,7 @@ class FeaStNet(torch.nn.Module):
 ###############################################################################
     def predict(self, inputs):
         # prep data
-        inputsScaled = self.applySS(inputs)
+        inputsScaled = self.applyAllTransforms(inputs)
         testLoader = tg.data.DataLoader(inputsScaled, batch_size=1, shuffle=False)
 
         preds = []
@@ -216,7 +224,7 @@ class FeaStNet(torch.nn.Module):
             for batch in testLoader:
                 batch.to(self.device)
                 out = self(batch)
-                p = self.applyInvSS(out.cpu().numpy())
+                p = self.applyAllInvTransforms(out.cpu().numpy())
                 preds.append(p)
         return preds
 

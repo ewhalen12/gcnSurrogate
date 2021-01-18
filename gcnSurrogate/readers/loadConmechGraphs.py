@@ -8,8 +8,12 @@ import torch_geometric as tg
 ###############################################################################
 def loadConmechGraphs(modelDir, nodeDims=[0,2], supportDims=[0,2], 
                       loadDims=[2]):
+    
+    allFiles = glob.glob(os.path.join(modelDir, '*.json'))
+    allFileIds = [int(s.split('/')[-1].split('.json')[0]) for s in allFiles]
+    
     graphList = []
-    for modelFile in glob.glob(os.path.join(modelDir, '*.json')):
+    for i, modelFile in sorted(zip(allFileIds, allFiles)):
         g = _loadConmechGraph(modelFile, nodeDims=nodeDims, 
                               supportDims=supportDims, loadDims=loadDims)
         graphList.append(g)
