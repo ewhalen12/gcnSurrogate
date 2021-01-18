@@ -7,14 +7,17 @@ from ..util.gcnSurrogateUtil import *
 
 ###############################################################################
 def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, prediction=None, 
-               baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', width=600, 
-               height=300, z=10, lineWidth=2.0, lineOpacity=1.0, showPoints=False, pointSize=1, 
-               withoutConfigure=False, background='white'):
+              baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', width=600, 
+              z=10, domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
+              showPoints=False, pointSize=1, withoutConfigure=False, background='white'):
     
     dfPoints = pd.DataFrame(graph.pos.numpy(), columns=['x', 'y'])
     cg = dfPoints.mean().values
-    domX = [cg[0]-0.5*width/z,cg[0]+0.5*width/z]
-    domY = [cg[1]-0.5*height/z,cg[1]+0.5*height/z]
+    domX = [cg[0]-0.5*width/z,cg[0]+0.5*width/z] if domX=='auto' else domX
+    domY = [cg[1]-0.5*height/z,cg[1]+0.5*height/z] if domY=='auto' else domY
+    rangeX = domX[1]-domX[0]
+    rangeY = domY[1]-domY[0]
+    height = width*rangeY/rangeX  # should guarentee equal aspect ratio
     chartList = []
 
     if showUndeformed and not showDeformed:
@@ -48,6 +51,8 @@ def plotGraph(pos, edge_index, domX, domY, color='#4C78A8', showPoints=False, li
     base = alt.Chart(df).mark_circle().encode(
         alt.X('x:Q', scale=alt.Scale(domain=domX), axis=None), 
         alt.Y('y:Q', scale=alt.Scale(domain=domY), axis=None),
+#         alt.X('x:Q', scale=alt.Scale(domain=domX)), 
+#         alt.Y('y:Q', scale=alt.Scale(domain=domY)),
         opacity=alt.value(pointOpacity),
         color = alt.value(color),
         size = alt.value(pointSize)
