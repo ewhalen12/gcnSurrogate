@@ -13,8 +13,10 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
     
     dfPoints = pd.DataFrame(graph.pos.numpy(), columns=['x', 'y'])
     cg = dfPoints.mean().values
-    domX = [cg[0]-0.5*width/z,cg[0]+0.5*width/z] if domX=='auto' else domX
-    domY = [cg[1]-0.5*height/z,cg[1]+0.5*height/z] if domY=='auto' else domY
+    domX = [dfPoints['x'].min(), dfPoints['x'].max()] if domX=='auto' else domX
+    domY = [dfPoints['y'].min(), dfPoints['y'].max()] if domY=='auto' else domY
+#     domX = [cg[0]-0.5*width/z,cg[0]+0.5*width/z] if domX=='auto' else domX
+#     domY = [cg[1]-0.5*height/z,cg[1]+0.5*height/z] if domY=='auto' else domY
     rangeX = domX[1]-domX[0]
     rangeY = domY[1]-domY[0]
     height = width*rangeY/rangeX  # should guarentee equal aspect ratio
