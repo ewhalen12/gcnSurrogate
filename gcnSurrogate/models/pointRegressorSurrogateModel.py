@@ -26,6 +26,11 @@ class PointRegressor():
         return np.sign(y)*(np.exp(np.abs(y))-1.0)/10.0
     
 ###############################################################################
+    def makeLoadsBinary(self, graph):
+        graph.x = (graph.x!=0).double()
+        return graph
+    
+###############################################################################
     def fitSS(self, graphList):
         self.ss = StandardScaler()
         if self.flatten:
@@ -40,9 +45,11 @@ class PointRegressor():
         return
     
 ###############################################################################
-    def applySS(self, graphList):
+    def applyAllTransforms(self, graphList):
         transformedGraphList = [g.clone() for g in graphList] # deep copy
         for graph in transformedGraphList:
+            if self.binaryLoads:
+                graph = self.makeLoadsBinary(graph)
             if self.ssTrans:
                 if self.flatten:
                     graph.y = torch.as_tensor(self.ss.transform(graph.y.reshape(-1,1).cpu()).reshape(-1,2), dtype=torch.float)
@@ -53,7 +60,7 @@ class PointRegressor():
         return transformedGraphList
     
 ###############################################################################
-    def applyInvSS(self, out):
+    def applyAllInvTransforms(self, out):
         if self.logTrans: 
             out = self.invLogTransFunc(out)
         if self.ssTrans:
@@ -64,23 +71,31 @@ class PointRegressor():
         return out
     
 ###############################################################################
-    def trainModel(self, trainGraphs, valGraphs, saveDir=None, flatten=False, logTrans=False, ssTrans=True):
+    def trainModel(self, trainGraphs, valGraphs, saveDir=None, flatten=False, logTrans=False, ssTrans=True, binaryLoads=True,
+                  useXFeatures=True):
         t = time()
-        # data transformation
         self.flatten = flatten
         self.logTrans = logTrans
         self.ssTrans = ssTrans
+        self.binaryLoads = binaryLoads
+        self.useXFeatures = useXFeatures
+    
+        # data transformation
         self.fitSS(trainGraphs)
-        trainGraphsScaled = self.applySS(trainGraphs)
-        valGraphsScaled = self.applySS(valGraphs)
+        trainGraphsScaled = self.applyAllTransforms(trainGraphs)
+        valGraphsScaled = self.applyAllTransforms(valGraphs)
 
         # put data in tabular form
         Xtrain = np.vstack([graph.pos.numpy().flatten() for graph in trainGraphsScaled])
+        if self.useXFeatures:
+            XtrainFeatures = np.vstack([graph.x.numpy().flatten() for graph in trainGraphsScaled])
+            Xtrain = np.concatenate([Xtrain, XtrainFeatures], axis=1)        
+
         Ytrain = np.vstack([graph.y.numpy().flatten() for graph in trainGraphsScaled])
     
         # build regressor for each output
         self.allModels = []
-        for i in range(Xtrain.shape[1]):
+        for i in range(Ytrain.shape[1]):
             rf = RandomForestRegressor()
             rf.fit(Xtrain, Ytrain[:,i])
             self.allModels.append(rf)
@@ -92,7 +107,7 @@ class PointRegressor():
             with open(self.checkptFile, 'wb') as fb:
                 pickle.dump(self.__dict__, fb)
             
-        print(f'trained {Xtrain.shape[1]} random forest models in {time()-t:.2f} seconds')
+        print(f'trained {len(self.allModels)} random forest models in {time()-t:.2f} seconds')
             
 ###############################################################################
     def predict(self, inputs):
@@ -100,8 +115,13 @@ class PointRegressor():
         NUM_SAMPLES = len(inputs)
         
         # prep data
-        inputsScaled = self.applySS(inputs)
+        inputsScaled = self.applyAllTransforms(inputs)
         Xinput = np.vstack([graph.pos.numpy().flatten() for graph in inputsScaled])
+        
+        if self.useXFeatures:
+            XinputFeatures = np.vstack([graph.x.numpy().flatten() for graph in inputsScaled])
+            Xinput = np.concatenate([Xinput, XinputFeatures], axis=1)  
+        
         predArray = np.zeros((NUM_SAMPLES, NUM_OUTPUTS))
         
         # run inference for each model
@@ -112,7 +132,7 @@ class PointRegressor():
         preds = []
         for j in range(NUM_SAMPLES):
             yPred = predArray[j,:].reshape(-1,2)
-            yPred = self.applyInvSS(yPred)
+            yPred = self.applyAllInvTransforms(yPred)
             preds.append(yPred)
         
         return preds
