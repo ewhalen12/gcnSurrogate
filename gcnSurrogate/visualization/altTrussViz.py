@@ -2,21 +2,20 @@ import sys
 import numpy as np
 import pandas as pd
 import altair as alt
+import geojson
 
 from ..util.gcnSurrogateUtil import *
 
 ###############################################################################
 def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, prediction=None, 
-              baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', width=600, 
-              z=10, domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
-              showPoints=False, pointSize=1, withoutConfigure=False, background='white'):
+              baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', supportColor='#4C78A8', width=600, 
+              domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
+              showPoints=False, pointSize=1, withoutConfigure=False, background='white', showAxis=False,
+              showSupports=False):
     
     dfPoints = pd.DataFrame(graph.pos.numpy(), columns=['x', 'y'])
-    cg = dfPoints.mean().values
     domX = [dfPoints['x'].min(), dfPoints['x'].max()] if domX=='auto' else domX
     domY = [dfPoints['y'].min(), dfPoints['y'].max()] if domY=='auto' else domY
-#     domX = [cg[0]-0.5*width/z,cg[0]+0.5*width/z] if domX=='auto' else domX
-#     domY = [cg[1]-0.5*height/z,cg[1]+0.5*height/z] if domY=='auto' else domY
     rangeX = domX[1]-domX[0]
     rangeY = domY[1]-domY[0]
     height = width*rangeY/rangeX  # should guarentee equal aspect ratio
@@ -24,21 +23,27 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
 
     if showUndeformed and not showDeformed:
         chartList.extend(plotGraph(graph.pos.numpy(), graph.edge_index, domX, domY, color=baseColor, 
-                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize))
+                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
         
     if showDeformed and not showUndeformed:
         chartList.extend(plotGraph((graph.pos+defScale*graph.y).numpy(), graph.edge_index, domX, domY, color=baseColor, 
-                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize))
+                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
         
     if showUndeformed and showDeformed:
         chartList.extend(plotGraph(graph.pos.numpy(), graph.edge_index, domX, domY, color=fadedColor, 
-                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize))
+                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
         chartList.extend(plotGraph((graph.pos+defScale*graph.y).numpy(), graph.edge_index, domX, domY, color=baseColor, 
-                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize))
+                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
         
     if prediction is not None:
         chartList.extend(plotGraph((graph.pos+defScale*prediction).numpy(), graph.edge_index, domX, domY, color=brightColor, 
-                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize))
+                                   lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
+        
+    if showSupports:
+        print(len(chartList))
+        chartList.extend(plotSupports(graph, width, height, rangeX, rangeY, xFeatureInd=0, color=supportColor, size=35))
+        print(len(chartList))
+        
     if withoutConfigure:
         return alt.layer(*chartList).properties(width=width, height=height)
     else:
@@ -46,15 +51,14 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
 
 
 ###############################################################################
-def plotGraph(pos, edge_index, domX, domY, color='#4C78A8', showPoints=False, lineWidth=2.0, lineOpacity=1, pointSize=1.0):
+def plotGraph(pos, edge_index, domX, domY, color='#4C78A8', showPoints=False, lineWidth=2.0, lineOpacity=1, pointSize=1.0, showAxis=False):
     chartList = []
     pointOpacity = 1 if showPoints else 0
     df = pd.DataFrame(pos, columns=['x', 'y'])
+    axis = alt.Axis() if showAxis else None
     base = alt.Chart(df).mark_circle().encode(
-        alt.X('x:Q', scale=alt.Scale(domain=domX), axis=None), 
-        alt.Y('y:Q', scale=alt.Scale(domain=domY), axis=None),
-#         alt.X('x:Q', scale=alt.Scale(domain=domX)), 
-#         alt.Y('y:Q', scale=alt.Scale(domain=domY)),
+        alt.X('x:Q', scale=alt.Scale(domain=domX, nice=False), axis=axis), 
+        alt.Y('y:Q', scale=alt.Scale(domain=domY, nice=False), axis=axis),
         opacity=alt.value(pointOpacity),
         color = alt.value(color),
         size = alt.value(pointSize)
@@ -73,6 +77,30 @@ def plotGraph(pos, edge_index, domX, domY, color='#4C78A8', showPoints=False, li
                     )
             chartList.append(line)
     return chartList
+
+###############################################################################
+def plotSupports(graph, width, height, rangeX, rangeY, xFeatureInd=0, color='#4C78A8', size=35):
+    numPts = graph.pos.shape[0]
+    chartList = []
+    for i in range(numPts):
+        pos = graph.pos.numpy()[i,:]
+        pixelPos = [pos[0]*width/rangeX, -pos[1]*height/rangeY]
+        print(pos)
+        print(pixelPos)
+        chartList.append(plotTriangle(pixelPos, size=size, color=color))
+    return chartList
+
+###############################################################################
+def plotTriangle(pixelPos, size=35, color='#4C78A8'):
+    triangle = geojson.Polygon([[[0, 0], 
+                                 [-1/2.0, np.sqrt(3.0)/2.0], 
+                                 [1/2.0, np.sqrt(3.0)/2.0], 
+                                 [0, 0]]])
+    tFig = alt.Chart(triangle).mark_geoshape(color=color).encode().properties(
+        projection={'type': 'identity', 
+                    'scale': size,
+                    'translate': pixelPos})
+    return tFig
 
 ###############################################################################
 def interactiveErrorPlot(graphList, predictions):
