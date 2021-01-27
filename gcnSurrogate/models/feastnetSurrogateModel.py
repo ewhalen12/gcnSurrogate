@@ -97,6 +97,7 @@ class FeaStNet(torch.nn.Module):
 ###############################################################################
     def fitSS(self, graphList):
         self.ss = StandardScaler()
+        print(f'fitSS: self.flatten: {self.flatten}')
         if self.flatten:
             allResponses = np.empty((0,1))
             for graph in graphList:
@@ -141,13 +142,15 @@ class FeaStNet(torch.nn.Module):
             print('loading restart file')
             self.loadModel(restartFile)
             self.checkptFile = None
-        else: 
-            # data transformation settings
-            self.binaryLoads = binaryLoads
-            self.flatten = flatten
-            self.logTrans = logTrans
-            self.ssTrans = ssTrans
-            self.fitSS(trainGraphs)
+            
+        # data transformation settings
+        self.binaryLoads = binaryLoads
+        self.flatten = flatten
+        self.logTrans = logTrans
+        self.ssTrans = ssTrans
+        print(f'train model: flatten: {flatten}')
+        print(f'train model: self.flatten: {self.flatten}')
+        self.fitSS(trainGraphs)
             
         trainGraphsScaled = self.applyAllTransforms(trainGraphs)
         loader = tg.data.DataLoader(trainGraphsScaled, batch_size=batchSize, shuffle=True)

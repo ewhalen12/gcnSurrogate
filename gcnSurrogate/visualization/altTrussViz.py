@@ -11,7 +11,7 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
               baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', loadColor='#4C78A8', width=600, 
               domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
               showPoints=False, pointSize=1, withoutConfigure=False, background='white', showAxis=False,
-              showSupports=False, showLoads=False):
+              showSupports=False, showLoads=False, loadTheta=-90):
     
     dfPoints = pd.DataFrame(graph.pos.numpy(), columns=['x', 'y'])
     domX = [dfPoints['x'].min(), dfPoints['x'].max()] if domX=='auto' else domX
@@ -43,7 +43,7 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
         chartList.extend(plotSupports(graph, width, height, domX, domY, color=loadColor, size=35))
         
     if showLoads:
-        chartList.extend(plotLoads(graph, width, height, domX, domY, color=loadColor, size=20))
+        chartList.extend(plotLoads(graph, width, height, domX, domY, color=loadColor, size=20, theta=loadTheta))
         
     if withoutConfigure:
         return alt.layer(*chartList).properties(width=width, height=height)
@@ -101,7 +101,7 @@ def plotSupports(graph, width, height, domX, domY, color='#4C78A8', size=35):
     return chartList
 
 ###############################################################################
-def plotLoads(graph, width, height, domX, domY, color='#4C78A8', size=10):
+def plotLoads(graph, width, height, domX, domY, color='#4C78A8', size=10, theta=-90):
     rangeX = domX[1]-domX[0]
     rangeY = domY[1]-domY[0]
     
@@ -112,7 +112,7 @@ def plotLoads(graph, width, height, domX, domY, color='#4C78A8', size=10):
             pos = graph.pos.numpy()[i,:]
             pixelPos = [width*(pos[0]-domX[0])/rangeX, -height*(pos[1]-domY[1])/rangeY]
             magnitude = np.abs(graph.x[i,2])
-            chartList.append(plotForce(pixelPos, size=size, color=color))
+            chartList.append(plotForce(pixelPos, size=size, color=color, theta=theta))
 #             chartList.append(plotForceLabel(magnitude, pos.tolist()))
     return chartList
 
@@ -149,7 +149,7 @@ def plotRollerSupport(pixelPos, size=35, color='#4C78A8'):
     return cFig
 
 ###############################################################################
-def plotForce(pixelPos, size=10, color='#4C78A8', L=3, w=0.1):
+def plotForce(pixelPos, size=10, color='#4C78A8', L=3, w=0.1, theta=-90):
     arPts = np.array([[0.0, 0.0], 
                        [-4*w, -np.sqrt(3.0)/2.0], 
                        [-w, -np.sqrt(3.0)/2.0], 
@@ -158,6 +158,13 @@ def plotForce(pixelPos, size=10, color='#4C78A8', L=3, w=0.1):
                        [w, -np.sqrt(3.0)/2.0], 
                        [4*w, -np.sqrt(3.0)/2.0], 
                        [0.0, 0.0]])
+    
+    # rotate
+    theta = np.radians(theta)+np.pi/2
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+    arPts = np.matmul(arPts,R) 
+    
     arPts *= size
     arPts += pixelPos
     arrow = geojson.Polygon([arPts.tolist()])

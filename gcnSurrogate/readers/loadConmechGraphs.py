@@ -9,7 +9,10 @@ import torch_geometric as tg
 def loadConmechGraphs(modelDir, nodeDims=[0,2], supportDims=[0,2], 
                       loadDims=[2]):
     
+    assert os.path.isdir(modelDir), 'directory does not exist'
     allFiles = glob.glob(os.path.join(modelDir, '*.json'))
+    
+    assert len(allFiles)>0, 'the directory is empty'
     allFileIds = [int(s.split('/')[-1].split('.json')[0]) for s in allFiles]
     
     graphList = []
