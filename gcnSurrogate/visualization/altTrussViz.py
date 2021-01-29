@@ -8,10 +8,10 @@ from ..util.gcnSurrogateUtil import *
 
 ###############################################################################
 def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, prediction=None, 
-              baseColor='#4C78A8', fadedColor='#C7D5E5', brightColor='#0AD6FF', loadColor='#4C78A8', width=600, 
+              baseColor='#000000', fadedColor='#C7D5E5', brightColor='#0AD6FF', loadColor='#0096C7', width=600, 
               domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
               showPoints=False, pointSize=1, withoutConfigure=False, background='white', showAxis=False,
-              showSupports=False, showLoads=False, loadTheta=-90):
+              showSupports=False, showLoads=False, loadTheta=-90, loadSize=3000, supportSize=3000, autosize=True):
     
     dfPoints = pd.DataFrame(graph.pos.numpy(), columns=['x', 'y'])
     domX = [dfPoints['x'].min(), dfPoints['x'].max()] if domX=='auto' else domX
@@ -40,15 +40,18 @@ def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, predi
                                    lineWidth=lineWidth, lineOpacity=lineOpacity, showPoints=showPoints, pointSize=pointSize, showAxis=showAxis))
         
     if showSupports:
-        chartList.extend(plotSupports(graph, width, height, domX, domY, color=loadColor, size=35))
+        chartList.extend(plotSupports(graph, color=loadColor, size=supportSize))
         
     if showLoads:
-        chartList.extend(plotLoads(graph, width, height, domX, domY, color=loadColor, size=20, theta=loadTheta))
+        chartList.extend(plotLoads(graph, color=loadColor, size=loadSize, theta=loadTheta))
         
     if withoutConfigure:
-        return alt.layer(*chartList).properties(width=width, height=height)
+        fig = alt.layer(*chartList).properties(width=width, height=height)
+        return fig
     else:
-        return alt.layer(*chartList, background=background).configure_view(strokeOpacity=0).properties(width=width, height=height)
+        fig = alt.layer(*chartList, background=background).configure_view(strokeOpacity=0).properties(width=width, height=height)
+        if autosize: fig.autosize=alt.AutoSizeParams(contains='padding', type='fit')
+        return fig
 
 
 ###############################################################################
@@ -79,111 +82,175 @@ def plotGraph(pos, edge_index, domX, domY, color='#4C78A8', showPoints=False, li
             chartList.append(line)
     return chartList
 
-###############################################################################
-def plotSupports(graph, width, height, domX, domY, color='#4C78A8', size=35):
-    rangeX = domX[1]-domX[0]
-    rangeY = domY[1]-domY[0]
+# ###############################################################################
+# def plotSupports(graph, width, height, domX, domY, color='#4C78A8', size=35):
+#     rangeX = domX[1]-domX[0]
+#     rangeY = domY[1]-domY[0]
     
-    numPts = graph.pos.shape[0]
-    chartList = []
-    for i in range(numPts):
-        if graph.x[i,0]==1 or graph.x[i,1]==1:
-            pos = graph.pos.numpy()[i,:]
-            pixelPos = [width*(pos[0]-domX[0])/rangeX, -height*(pos[1]-domY[1])/rangeY]
-            if graph.x[i,0]==1 and graph.x[i,1]==1:
-                chartList.append(plotPinSupport(pixelPos, size=size, color=color))
-            elif graph.x[i,1]==1:
-                chartList.append(plotPinSupport(pixelPos, size=size, color=color))
-                chartList.append(plotRollerSupport(pixelPos, size=size, color=color))
-            else:
-                print('WARNING: VERTICAL ROLLER NOT IMPLEMENTED')
+#     numPts = graph.pos.shape[0]
+#     chartList = []
+#     for i in range(numPts):
+#         if graph.x[i,0]==1 or graph.x[i,1]==1:
+#             pos = graph.pos.numpy()[i,:]
+#             pixelPos = [width*(pos[0]-domX[0])/rangeX, -height*(pos[1]-domY[1])/rangeY]
+#             if graph.x[i,0]==1 and graph.x[i,1]==1:
+#                 chartList.append(plotPinSupport(pixelPos, size=size, color=color))
+#             elif graph.x[i,1]==1:
+#                 chartList.append(plotPinSupport(pixelPos, size=size, color=color))
+#                 chartList.append(plotRollerSupport(pixelPos, size=size, color=color))
+#             else:
+#                 print('WARNING: VERTICAL ROLLER NOT IMPLEMENTED')
                 
-    return chartList
+#     return chartList
 
 ###############################################################################
-def plotLoads(graph, width, height, domX, domY, color='#4C78A8', size=10, theta=-90):
-    rangeX = domX[1]-domX[0]
-    rangeY = domY[1]-domY[0]
+def plotSupports(graph, color='#4C78A8', size=100):
+    posxdf = pd.DataFrame(np.hstack([graph.pos,graph.x]), columns=['x','y','sx','sy', 'load'])
+    # pins
+    wt = 0.5
+    ht = 0.866
+    triangleSvg = f"M 0 0 L {wt} {ht} L {-wt} {ht} Z "
+    pinChart = alt.Chart(posxdf.loc[(posxdf.sx==1) & (posxdf.sy==1)]).mark_point(
+        shape=triangleSvg, 
+        fill=color, 
+        stroke=color, 
+        opacity=1.0, 
+        size=size).encode(x='x', y='y')
+
+    # x-rollers
+    r = 0.15
+    w = 0.25
+    y = ht+r
+    c = 0.05
+    rollerSvg = f"""M 0 0 L {wt} {ht} L {-wt} {ht} Z 
+                        M{w-r},{y} A{c},{c},0,0,1,{w+r},{y}A{c},{c},0,1,1,{w-r},{y} 
+                        M{-w-r},{y} A{c},{c},0,0,1,{-w+r},{y} A{c},{c},0,1,1,{-w-r},{y}"""
+    rollerXChart = alt.Chart(posxdf.loc[(posxdf.sx==0) & (posxdf.sy==1)]).mark_point(
+        shape=rollerSvg, 
+        fill=color, 
+        stroke=color, 
+        opacity=1.0, 
+        size=size).encode(x='x', y='y')
+                
+    return [pinChart, rollerXChart]
+
+# ###############################################################################
+# def plotLoads(graph, width, height, domX, domY, color='#4C78A8', size=10, theta=-90):
+#     rangeX = domX[1]-domX[0]
+#     rangeY = domY[1]-domY[0]
     
-    numPts = graph.pos.shape[0]
-    chartList = []
-    for i in range(numPts):
-        if graph.x[i,2]!=0:
-            pos = graph.pos.numpy()[i,:]
-            pixelPos = [width*(pos[0]-domX[0])/rangeX, -height*(pos[1]-domY[1])/rangeY]
-            magnitude = np.abs(graph.x[i,2])
-            chartList.append(plotForce(pixelPos, size=size, color=color, theta=theta))
-#             chartList.append(plotForceLabel(magnitude, pos.tolist()))
-    return chartList
+#     numPts = graph.pos.shape[0]
+#     chartList = []
+#     for i in range(numPts):
+#         if graph.x[i,2]!=0:
+#             pos = graph.pos.numpy()[i,:]
+#             pixelPos = [width*(pos[0]-domX[0])/rangeX, -height*(pos[1]-domY[1])/rangeY]
+#             magnitude = np.abs(graph.x[i,2])
+#             chartList.append(plotForce(pixelPos, size=size, color=color, theta=theta))
+# #             chartList.append(plotForceLabel(magnitude, pos.tolist()))
+#     return chartList
 
 ###############################################################################
-def plotPinSupport(pixelPos, size=35, color='#4C78A8'):
-    triPts = np.array([[0, 0], 
-                       [-1/2.0, np.sqrt(3.0)/2.0], 
-                       [1/2.0, np.sqrt(3.0)/2.0], 
-                       [0, 0]])
-    triPts *= size
-    triPts += pixelPos
-    triangle = geojson.Polygon([triPts.tolist()])
-    tFig = alt.Chart(triangle).mark_geoshape(color=color).encode().properties(
-        projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
-    return tFig
-
-###############################################################################
-def plotRollerSupport(pixelPos, size=35, color='#4C78A8'):
-    theta = np.linspace(0,2*np.pi,num=32,endpoint=True).reshape(-1,1)
-    cirPts = np.concatenate([np.cos(theta), np.sin(theta)], axis=1)
+def plotLoads(graph, color='#4C78A8', size=100, theta=-90):
+    posxdf = pd.DataFrame(np.hstack([graph.pos,graph.x]), columns=['x','y','sx','sy', 'load'])
     
-    cirPts *= size/7
-    cirPts += pixelPos
-    
-    cirPts1 = cirPts + [size/3,size]
-    cirPts2 = cirPts + [-size/3,size]
-    
-    cir1 = geojson.Polygon([cirPts1.tolist()])
-    cir2 = geojson.Polygon([cirPts2.tolist()])
-    featCol = geojson.FeatureCollection([cir1, cir2])
-    cirData = alt.InlineData(values=featCol, format=alt.DataFormat(property='features',type='json')) 
-    cFig = alt.Chart(cirData).mark_geoshape(color=color).encode().properties(
-        projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
-    return cFig
-
-###############################################################################
-def plotForce(pixelPos, size=10, color='#4C78A8', L=3, w=0.1, theta=-90):
+    L=3
+    w=0.1
     arPts = np.array([[0.0, 0.0], 
                        [-4*w, -np.sqrt(3.0)/2.0], 
                        [-w, -np.sqrt(3.0)/2.0], 
                        [-w, -L], 
                        [w, -L], 
                        [w, -np.sqrt(3.0)/2.0], 
-                       [4*w, -np.sqrt(3.0)/2.0], 
-                       [0.0, 0.0]])
-    
+                       [4*w, -np.sqrt(3.0)/2.0]])
+
     # rotate
     theta = np.radians(theta)+np.pi/2
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
     arPts = np.matmul(arPts,R) 
-    
-    arPts *= size
-    arPts += pixelPos
-    arrow = geojson.Polygon([arPts.tolist()])
-    aFig = alt.Chart(arrow).mark_geoshape(color=color).encode().properties(
-        projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
-    aFig
-    return aFig
+
+    forceChart = alt.Chart(posxdf.loc[posxdf.load!=0]).mark_point(
+        shape=polylineToSvg(arPts), 
+        fill=color, 
+        stroke=color, 
+        opacity=1.0, 
+        size=size).encode(x='x', y='y')
+
+    return [forceChart]
 
 ###############################################################################
-def plotForceLabel(val, pos, size=25, shift=[1,5], unitStr='Kips'):
-        return alt.Chart(
-            {'values': [{"text": f'{val}\n{unitStr}', 
-                         'x':pos[0]+shift[0], 
-                         'y':pos[1]+shift[1]}]}
-        ).mark_text(size=size, align='left', font='Arial', lineBreak='\n').encode(
-            x='x:Q',
-            y='y:Q',
-            text="text:N"
-        ).properties()
+def polylineToSvg(coords):
+    return 'M'+' '.join([f'L {i} {j}' for i,j in coords])[1:]
+
+###############################################################################
+# def plotPinSupport(pixelPos, size=35, color='#4C78A8'):
+#     triPts = np.array([[0, 0], 
+#                        [-1/2.0, np.sqrt(3.0)/2.0], 
+#                        [1/2.0, np.sqrt(3.0)/2.0], 
+#                        [0, 0]])
+#     triPts *= size
+#     triPts += pixelPos
+#     triangle = geojson.Polygon([triPts.tolist()])
+#     tFig = alt.Chart(triangle).mark_geoshape(color=color).encode().properties(
+#         projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
+#     return tFig
+
+###############################################################################
+# def plotRollerSupport(pixelPos, size=35, color='#4C78A8'):
+#     theta = np.linspace(0,2*np.pi,num=32,endpoint=True).reshape(-1,1)
+#     cirPts = np.concatenate([np.cos(theta), np.sin(theta)], axis=1)
+    
+#     cirPts *= size/7
+#     cirPts += pixelPos
+    
+#     cirPts1 = cirPts + [size/3,size]
+#     cirPts2 = cirPts + [-size/3,size]
+    
+#     cir1 = geojson.Polygon([cirPts1.tolist()])
+#     cir2 = geojson.Polygon([cirPts2.tolist()])
+#     featCol = geojson.FeatureCollection([cir1, cir2])
+#     cirData = alt.InlineData(values=featCol, format=alt.DataFormat(property='features',type='json')) 
+#     cFig = alt.Chart(cirData).mark_geoshape(color=color).encode().properties(
+#         projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
+#     return cFig
+
+###############################################################################
+# def plotForce(pixelPos, size=10, color='#4C78A8', L=3, w=0.1, theta=-90):
+#     arPts = np.array([[0.0, 0.0], 
+#                        [-4*w, -np.sqrt(3.0)/2.0], 
+#                        [-w, -np.sqrt(3.0)/2.0], 
+#                        [-w, -L], 
+#                        [w, -L], 
+#                        [w, -np.sqrt(3.0)/2.0], 
+#                        [4*w, -np.sqrt(3.0)/2.0], 
+#                        [0.0, 0.0]])
+    
+#     # rotate
+#     theta = np.radians(theta)+np.pi/2
+#     c, s = np.cos(theta), np.sin(theta)
+#     R = np.array(((c, -s), (s, c)))
+#     arPts = np.matmul(arPts,R) 
+    
+#     arPts *= size
+#     arPts += pixelPos
+#     arrow = geojson.Polygon([arPts.tolist()])
+#     aFig = alt.Chart(arrow).mark_geoshape(color=color).encode().properties(
+#         projection={'type': 'identity', 'scale': 1, 'translate':[0,0]})
+#     aFig
+#     return aFig
+
+###############################################################################
+# def plotForceLabel(val, pos, size=25, shift=[1,5], unitStr='Kips'):
+#         return alt.Chart(
+#             {'values': [{"text": f'{val}\n{unitStr}', 
+#                          'x':pos[0]+shift[0], 
+#                          'y':pos[1]+shift[1]}]}
+#         ).mark_text(size=size, align='left', font='Arial', lineBreak='\n').encode(
+#             x='x:Q',
+#             y='y:Q',
+#             text="text:N"
+#         ).properties()
 
 ###############################################################################
 def interactiveErrorPlot(graphList, predictions):
