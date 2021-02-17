@@ -8,7 +8,7 @@ from ..util.gcnSurrogateUtil import *
 
 ###############################################################################
 def plotTruss(graph, showDeformed=False, defScale=10, showUndeformed=True, prediction=None, 
-              baseColor='#000000', fadedColor='#C7D5E5', brightColor='#0AD6FF', loadColor='#0096C7', width=600, 
+              baseColor='#000000', fadedColor='#C7D5E5', brightColor='#0096C7', loadColor='#0096C7', width=600, 
               domX='auto', domY='auto', lineWidth=2.0, lineOpacity=1.0, 
               showPoints=False, pointSize=1, withoutConfigure=False, background='white', showAxis=False,
               showSupports=False, showLoads=False, loadTheta=-90, loadSize=3000, supportSize=3000, autosize=True):
